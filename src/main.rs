@@ -38,9 +38,13 @@ struct Todo {
 
 #[derive(Debug, Parser)]
 enum Commands {
+    /// Add a new todo
     Add { message: String },
+    /// List open todos
     List,
+    /// Update todo status
     Set { id: u32, status: TodoStatus },
+    /// Remove done todos
     Prune,
 }
 
