@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::prelude::*;
 use chrono_humanize::HumanTime;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use rusqlite::{params, Connection, ToSql};
 use std::fmt;
 use std::fs;
@@ -36,11 +36,12 @@ struct Todo {
     title: String,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Add a new todo
     Add { message: String },
     /// List open todos
+    #[command(visible_alias = "ls")]
     List,
     /// Update todo status
     Set { id: u32, status: TodoStatus },
