@@ -3,8 +3,8 @@ use chrono::prelude::*;
 use chrono_humanize::HumanTime;
 use clap::{Parser, ValueEnum};
 use rusqlite::{params, Connection, ToSql};
-use std::fs;
 use std::fmt;
+use std::fs;
 
 #[derive(Debug, Clone, ValueEnum)]
 enum TodoStatus {
@@ -25,7 +25,7 @@ impl fmt::Display for TodoStatus {
 
 impl ToSql for TodoStatus {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-       Ok(self.to_string().into())
+        Ok(self.to_string().into())
     }
 }
 
@@ -38,14 +38,10 @@ struct Todo {
 
 #[derive(Debug, Parser)]
 enum Commands {
-    Add {
-        message: String,
-    },
+    Add { message: String },
     List,
-    Set {
-        id: u32,
-        status: TodoStatus,
-    }
+    Set { id: u32, status: TodoStatus },
+    Prune,
 }
 
 #[derive(Debug, Parser)]
@@ -105,8 +101,21 @@ fn main() -> Result<()> {
             });
         }
         Commands::Set { id, status } => {
-            db.execute("UPDATE todos SET status = ?1 WHERE id = ?2", params![status, id])
-                .expect("failed to update todo status");
+            db.execute(
+                "UPDATE todos SET status = ?1 WHERE id = ?2",
+                params![status, id],
+            )
+            .expect("failed to update todo status");
+        }
+        Commands::Prune => {
+            db.execute("DELETE FROM todos WHERE status = 'DONE'", ())
+                .expect("failed to delete todos");
+
+            db.execute(
+                "UPDATE SQLITE_SEQUENCE SET SEQ = (SELECT MAX(id) FROM todos) WHERE NAME = 'todos'",
+                (),
+            )
+            .expect("failed to reset autoincrement");
         }
     }
 
