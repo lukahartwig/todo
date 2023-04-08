@@ -1,44 +1,19 @@
 use anyhow::Result;
-use chrono::prelude::*;
 use chrono_humanize::HumanTime;
-use clap::{Parser, Subcommand, ValueEnum};
-use rusqlite::{params, Connection, ToSql};
-use std::fmt;
+use clap::{Parser, Subcommand};
 use std::fs;
 
-mod embedded {
-    use refinery::embed_migrations;
-    embed_migrations!("./migrations");
-}
+mod store;
+mod todo;
 
-#[derive(Debug, Clone, ValueEnum)]
-enum TodoStatus {
-    Ready,
-    Doing,
-    Done,
-}
+use crate::store::Store;
+use crate::todo::{Todo, TodoStatus};
 
-impl fmt::Display for TodoStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TodoStatus::Ready => write!(f, "READY"),
-            TodoStatus::Doing => write!(f, "DOING"),
-            TodoStatus::Done => write!(f, "DONE"),
-        }
-    }
-}
-
-impl ToSql for TodoStatus {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-        Ok(self.to_string().into())
-    }
-}
-
-#[derive(Debug)]
-struct Todo {
-    id: u32,
-    created_at: DateTime<Local>,
-    title: String,
+#[derive(Debug, Parser)]
+#[clap(name = "todo", version)]
+struct App {
+    #[clap(subcommand)]
+    command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
@@ -54,13 +29,6 @@ enum Commands {
     Prune,
 }
 
-#[derive(Debug, Parser)]
-#[clap(name = "todo", version)]
-struct App {
-    #[clap(subcommand)]
-    command: Commands,
-}
-
 fn main() -> Result<()> {
     let app = App::parse();
 
@@ -70,55 +38,32 @@ fn main() -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path.as_path())?;
     }
-
-    let mut db = Connection::open(path.join("todo.db")).expect("failed to open todo database");
-    embedded::migrations::runner()
-        .run(&mut db)
-        .expect("failed to run migrations");
+    
+    let store = Store::open(path.join("todo.db"))?;
 
     match app.command {
         Commands::Add { message } => {
-            db.execute("INSERT INTO todos (title) VALUES (?1)", params![message])
-                .expect("failed to insert todo");
+            store.insert_todo(message).expect("failed to insert todo");
         }
         Commands::List => {
-            let mut stmt = db
-                .prepare("SELECT id, created_at, title FROM todos WHERE status != 'DONE'")
-                .expect("failed to prepare query");
+            let todos = store.find_open_todos().expect("failed to find open todos");
 
-            stmt.query_map([], |row| {
-                Ok(Todo {
-                    id: row.get(0)?,
-                    created_at: row.get(1)?,
-                    title: row.get(2)?,
-                })
-            })?
-            .filter_map(|todo| todo.ok())
-            .for_each(|todo| {
+            for todo in todos {
                 println!(
                     "{}) {} ({})",
                     todo.id,
                     todo.title,
                     HumanTime::from(todo.created_at)
                 );
-            });
+            }
         }
         Commands::Set { id, status } => {
-            db.execute(
-                "UPDATE todos SET status = ?1 WHERE id = ?2",
-                params![status, id],
-            )
-            .expect("failed to update todo status");
+            store
+                .update_todo_status(id, status)
+                .expect("failed to update todo status");
         }
         Commands::Prune => {
-            db.execute("DELETE FROM todos WHERE status = 'DONE'", ())
-                .expect("failed to delete todos");
-
-            db.execute(
-                "UPDATE SQLITE_SEQUENCE SET SEQ = (SELECT MAX(id) FROM todos) WHERE NAME = 'todos'",
-                (),
-            )
-            .expect("failed to reset autoincrement");
+            store.prune_todos().expect("failed pruning todos");
         }
     }
 
