@@ -6,6 +6,11 @@ use rusqlite::{params, Connection, ToSql};
 use std::fmt;
 use std::fs;
 
+mod embedded {
+    use refinery::embed_migrations;
+    embed_migrations!("./migrations");
+}
+
 #[derive(Debug, Clone, ValueEnum)]
 enum TodoStatus {
     Ready,
@@ -66,17 +71,8 @@ fn main() -> Result<()> {
         fs::create_dir_all(path.as_path())?;
     }
 
-    let db = Connection::open(path.join("todo.db")).expect("failed to open todo database");
-
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS todos (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-            title       TEXT NOT NULL,
-            status      TEXT NOT NULL DEFAULT 'READY'
-        )",
-        (),
-    )?;
+    let mut db = Connection::open(path.join("todo.db")).expect("failed to open todo database");
+    embedded::migrations::runner().run(&mut db).expect("failed to run migrations");
 
     match app.command {
         Commands::Add { message } => {
