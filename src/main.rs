@@ -72,7 +72,9 @@ fn main() -> Result<()> {
     }
 
     let mut db = Connection::open(path.join("todo.db")).expect("failed to open todo database");
-    embedded::migrations::runner().run(&mut db).expect("failed to run migrations");
+    embedded::migrations::runner()
+        .run(&mut db)
+        .expect("failed to run migrations");
 
     match app.command {
         Commands::Add { message } => {
