@@ -1,7 +1,8 @@
 use anyhow::Result;
 use chrono_humanize::HumanTime;
-use clap::{Parser, Subcommand};
-use std::fs;
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
+use std::{fs, io};
 
 mod store;
 mod todo;
@@ -12,6 +13,8 @@ use crate::todo::{Todo, TodoStatus};
 #[derive(Debug, Parser)]
 #[clap(name = "todo", version)]
 struct App {
+    #[arg(short)]
+    fail: String,
     #[clap(subcommand)]
     command: Commands,
 }
@@ -27,6 +30,8 @@ enum Commands {
     Set { id: u32, status: TodoStatus },
     /// Remove done todos
     Prune,
+    /// Generates completions
+    Completions { shell: Shell },
 }
 
 fn main() -> Result<()> {
@@ -38,7 +43,7 @@ fn main() -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path.as_path())?;
     }
-    
+
     let store = Store::open(path.join("todo.db"))?;
 
     match app.command {
@@ -64,6 +69,9 @@ fn main() -> Result<()> {
         }
         Commands::Prune => {
             store.prune_todos().expect("failed pruning todos");
+        }
+        Commands::Completions { shell } => {
+            generate(shell, &mut App::command(), "todo", &mut io::stdout());
         }
     }
 
