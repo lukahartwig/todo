@@ -13,8 +13,6 @@ use crate::todo::{Todo, TodoStatus};
 #[derive(Debug, Parser)]
 #[clap(name = "todo", version)]
 struct App {
-    #[arg(short)]
-    fail: String,
     #[clap(subcommand)]
     command: Commands,
 }
